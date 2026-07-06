@@ -38,13 +38,15 @@ export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Create a post" })
   @ApiBody({ type: CreatePostDto })
   @ApiResponse({ status: 201, description: "Post created", type: PostEntity })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
   @ApiResponse({ status: 422, description: "Validation error" })
-  async create(@Body() dto: CreatePostDto): Promise<PostEntity> {
-    return this.postsService.create(dto);
+  async create(@Body() dto: CreatePostDto, @Req() req: any): Promise<PostEntity> {
+    return this.postsService.create(dto, req.user.id);
   }
 
   @Get(":id")
@@ -90,32 +92,40 @@ export class PostsController {
   }
 
   @Patch(":id")
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: "Partially update a post by ID" })
   @ApiParam({ name: "id", type: "number", description: "The unique ID of the post" })
   @ApiBody({ type: UpdatePostDto })
   @ApiResponse({ status: 200, description: "The post was successfully updated.", type: PostEntity })
   @ApiResponse({ status: 400, description: "Bad request / validation error." })
+  @ApiResponse({ status: 401, description: "Unauthorized." })
+  @ApiResponse({ status: 403, description: "Forbidden — not the post author." })
   @ApiResponse({ status: 404, description: "Post not found." })
   @ApiResponse({ status: 422, description: "Unprocessable Entity due to business rules." })
   async update(
     @Param("id", ParseIntPipe) id: number,
     @Body() dto: UpdatePostDto,
+    @Req() req: any,
   ): Promise<PostEntity> {
-    return await this.postsService.update(id, dto);
+    return await this.postsService.update(id, dto, req.user.id);
   }
 
   @Put(":id")
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: "Replace a post by ID" })
   @ApiParam({ name: "id", type: "number", description: "The unique ID of the post" })
   @ApiBody({ type: ReplacePostDto })
   @ApiResponse({ status: 200, description: "The post was successfully replaced.", type: PostEntity })
   @ApiResponse({ status: 400, description: "Bad request / validation error." })
+  @ApiResponse({ status: 401, description: "Unauthorized." })
+  @ApiResponse({ status: 403, description: "Forbidden — not the post author." })
   @ApiResponse({ status: 404, description: "Post not found." })
   @ApiResponse({ status: 422, description: "Unprocessable Entity due to business rules." })
   async replace(
     @Param("id", ParseIntPipe) id: number,
     @Body() dto: ReplacePostDto,
+    @Req() req: any,
   ): Promise<PostEntity> {
-    return await this.postsService.update(id, dto);
+    return await this.postsService.update(id, dto, req.user.id);
   }
 }

@@ -80,6 +80,7 @@ describe("PostsController (e2e)", () => {
   it("POST /api/posts — crea post exitosamente (201)", () => {
     return request(app.getHttpServer())
       .post("/api/posts")
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "Titulo del Post", content: "Contenido del post" })
       .expect(201)
       .expect((res) => {
@@ -88,12 +89,15 @@ describe("PostsController (e2e)", () => {
         expect(res.body.content).toBe("Contenido del post");
         expect(res.body.slug).toBe("titulo-del-post");
         expect(res.body.status).toBe("draft");
+        // author_id debe ser el del usuario autenticado
+        expect(res.body.author_id).toBe(authorId);
       });
   });
 
   it("POST /api/posts — genera slug automatico desde title", () => {
     return request(app.getHttpServer())
       .post("/api/posts")
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "Hola Mundo", content: "x" })
       .expect(201)
       .expect((res) => {
@@ -104,6 +108,7 @@ describe("PostsController (e2e)", () => {
   it("POST /api/posts — falta title devuelve 422", () => {
     return request(app.getHttpServer())
       .post("/api/posts")
+      .set("Authorization", "Bearer " + authorToken)
       .send({ content: "x" })
       .expect(422)
       .expect((res) => {
@@ -115,6 +120,7 @@ describe("PostsController (e2e)", () => {
   it("POST /api/posts — falta content devuelve 422", () => {
     return request(app.getHttpServer())
       .post("/api/posts")
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "x" })
       .expect(422)
       .expect((res) => {
@@ -126,11 +132,19 @@ describe("PostsController (e2e)", () => {
   it("POST /api/posts — status por defecto es draft", () => {
     return request(app.getHttpServer())
       .post("/api/posts")
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "Post sin status", content: "contenido" })
       .expect(201)
       .expect((res) => {
         expect(res.body.status).toBe("draft");
       });
+  });
+
+  it("POST /api/posts — sin token devuelve 401", () => {
+    return request(app.getHttpServer())
+      .post("/api/posts")
+      .send({ title: "Post sin auth", content: "contenido" })
+      .expect(401);
   });
 
   it("/api/posts/:id (GET) - Publish (Anonymous)", async () => {

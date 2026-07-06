@@ -4,7 +4,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsIn,
-  IsInt,
 } from "class-validator";
 
 export type PostStatus = "draft" | "publish" | "pending" | "private" | "trash";
@@ -44,9 +43,4 @@ export class CreatePostDto {
   @IsOptional()
   @IsString()
   excerpt?: string | null;
-
-  @ApiPropertyOptional({ example: 1, nullable: true })
-  @IsOptional()
-  @IsInt()
-  author_id?: number | null;
 }

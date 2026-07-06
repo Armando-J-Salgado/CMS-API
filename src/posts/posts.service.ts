@@ -19,7 +19,7 @@ export class PostsService {
     private readonly postRepository: Repository<Post>,
   ) {}
 
-  async create(dto: CreatePostDto): Promise<Post> {
+  async create(dto: CreatePostDto, userId: number): Promise<Post> {
     const slug = dto.slug?.trim() ? dto.slug.trim() : this.slugify(dto.title);
     const status = dto.status ?? "draft";
     const published_at = status === "publish" ? new Date() : null;
@@ -29,7 +29,7 @@ export class PostsService {
         title: dto.title,
         content: dto.content,
         excerpt: dto.excerpt ?? null,
-        author_id: dto.author_id ?? null,
+        author_id: userId,
         deleted_at: null,
         slug,
         status,
@@ -58,7 +58,7 @@ export class PostsService {
   async update(
     id: number,
     dto: UpdatePostDto | ReplacePostDto,
-    currentUserId?: number,
+    currentUserId: number,
   ): Promise<Post> {
     const post = await this.postRepository.findOne({ where: { id } });
     if (!post) {
@@ -73,11 +73,7 @@ export class PostsService {
       }
     }
 
-    if (
-      currentUserId !== undefined &&
-      post.author_id !== null &&
-      post.author_id !== currentUserId
-    ) {
+    if (post.author_id !== null && post.author_id !== currentUserId) {
       throw new ForbiddenException("No tienes permiso para modificar este post.");
     }
 

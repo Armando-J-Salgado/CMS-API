@@ -5,11 +5,19 @@ import { AppModule } from "../src/app.module";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Post } from "../src/posts/entities/post.entity";
+import { User } from "../src/users/entities/user.entity";
 import { HttpExceptionFilter } from "../src/common/filters/http-exception.filter";
+import { JwtService } from "@nestjs/jwt";
 
 describe("Posts Update (e2e)", () => {
   let app: INestApplication;
   let postRepository: Repository<Post>;
+  let userRepository: Repository<User>;
+  let jwtService: JwtService;
+
+  let authorToken: string;
+  let otherToken: string;
+  let authorId: number;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -28,6 +36,8 @@ describe("Posts Update (e2e)", () => {
     await app.init();
 
     postRepository = moduleFixture.get<Repository<Post>>(getRepositoryToken(Post));
+    userRepository = moduleFixture.get<Repository<User>>(getRepositoryToken(User));
+    jwtService = moduleFixture.get<JwtService>(JwtService);
   });
 
   afterAll(async () => {
@@ -37,7 +47,26 @@ describe("Posts Update (e2e)", () => {
   beforeEach(async () => {
     // Clean database before each test
     await postRepository.clear();
+    await userRepository.clear();
+
+    // Create a fresh author and another user for each test
+    const author = await userRepository.save({
+      email: "author@update-test.com",
+      password_hash: "hash",
+      name: "Author",
+    });
+    authorId = author.id;
+    authorToken = jwtService.sign({ sub: author.id, email: author.email });
+
+    const other = await userRepository.save({
+      email: "other@update-test.com",
+      password_hash: "hash",
+      name: "Other",
+    });
+    otherToken = jwtService.sign({ sub: other.id, email: other.email });
   });
+
+  // ─── Existing tests (logic unchanged, now include JWT) ───────────────────
 
   it("PATCH /api/posts/:id - should partially update post title", async () => {
     const post = postRepository.create({
@@ -45,12 +74,13 @@ describe("Posts Update (e2e)", () => {
       content: "Original Content",
       slug: "original-title",
       status: "draft",
-      author_id: 1,
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     const response = await request(app.getHttpServer())
       .patch(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "New Title" })
       .expect(200);
 
@@ -66,18 +96,18 @@ describe("Posts Update (e2e)", () => {
       content: "Original Content",
       slug: "original-title",
       status: "draft",
-      author_id: 1,
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     const response = await request(app.getHttpServer())
       .put(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({
         title: "Replaced Title",
         content: "Replaced Content",
         excerpt: "New Excerpt",
         status: "pending",
-        author_id: 2,
       })
       .expect(200);
 
@@ -85,7 +115,6 @@ describe("Posts Update (e2e)", () => {
     expect(response.body.content).toBe("Replaced Content");
     expect(response.body.excerpt).toBe("New Excerpt");
     expect(response.body.status).toBe("pending");
-    expect(response.body.author_id).toBe(2);
   });
 
   it("PUT /api/posts/:id - should return 400 if title or content is missing", async () => {
@@ -94,18 +123,21 @@ describe("Posts Update (e2e)", () => {
       content: "Original Content",
       slug: "original-title",
       status: "draft",
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     // Missing content
     await request(app.getHttpServer())
       .put(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "Only Title" })
       .expect(400);
 
     // Missing title
     await request(app.getHttpServer())
       .put(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ content: "Only Content" })
       .expect(400);
   });
@@ -113,6 +145,7 @@ describe("Posts Update (e2e)", () => {
   it("PATCH /api/posts/:id - should return 404 if post does not exist", async () => {
     await request(app.getHttpServer())
       .patch("/api/posts/99999")
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "New Title" })
       .expect(404);
   });
@@ -123,11 +156,13 @@ describe("Posts Update (e2e)", () => {
       content: "Trash Content",
       slug: "trash-post",
       status: "trash",
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     const response = await request(app.getHttpServer())
       .patch(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "Updated Title" })
       .expect(422);
 
@@ -141,11 +176,13 @@ describe("Posts Update (e2e)", () => {
       slug: "trash-post",
       status: "trash",
       deleted_at: new Date(),
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     const response = await request(app.getHttpServer())
       .patch(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ status: "draft" })
       .expect(200);
 
@@ -159,12 +196,14 @@ describe("Posts Update (e2e)", () => {
       content: "",
       slug: "draft-post",
       status: "draft",
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     // Transition with empty content should fail
     await request(app.getHttpServer())
       .patch(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ status: "publish" })
       .expect(422);
   });
@@ -176,11 +215,13 @@ describe("Posts Update (e2e)", () => {
       slug: "draft-post",
       status: "draft",
       published_at: null,
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     const response = await request(app.getHttpServer())
       .patch(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ status: "publish" })
       .expect(200);
 
@@ -196,11 +237,13 @@ describe("Posts Update (e2e)", () => {
       slug: "published-post",
       status: "publish",
       published_at: originalPublishedAt,
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     const response = await request(app.getHttpServer())
       .patch(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ title: "New Title" })
       .expect(200);
 
@@ -213,11 +256,13 @@ describe("Posts Update (e2e)", () => {
       content: "Fine content",
       slug: "post-to-trash",
       status: "draft",
+      author_id: authorId,
     });
     const savedPost = await postRepository.save(post);
 
     const response = await request(app.getHttpServer())
       .patch(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ status: "trash" })
       .expect(200);
 
@@ -232,6 +277,7 @@ describe("Posts Update (e2e)", () => {
         content: "Content",
         slug: "post-one",
         status: "draft",
+        author_id: authorId,
       }),
     );
 
@@ -241,15 +287,131 @@ describe("Posts Update (e2e)", () => {
         content: "Content",
         slug: "post-two",
         status: "draft",
+        author_id: authorId,
       }),
     );
 
     // Try to update post2 to have the same slug as post1
     const response = await request(app.getHttpServer())
       .patch(`/api/posts/${post2.id}`)
+      .set("Authorization", "Bearer " + authorToken)
       .send({ slug: "post-one" })
       .expect(422);
 
     expect(response.body.message).toContain("ya está en uso");
+  });
+
+  // ─── New authorization tests ─────────────────────────────────────────────
+
+  it("PATCH /api/posts/:id - sin token devuelve 401", async () => {
+    const post = await postRepository.save(
+      postRepository.create({
+        title: "Some Post",
+        content: "Content",
+        slug: "some-post",
+        status: "draft",
+        author_id: authorId,
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .patch(`/api/posts/${post.id}`)
+      .send({ title: "Hacked Title" })
+      .expect(401);
+  });
+
+  it("PUT /api/posts/:id - sin token devuelve 401", async () => {
+    const post = await postRepository.save(
+      postRepository.create({
+        title: "Some Post",
+        content: "Content",
+        slug: "some-post-put",
+        status: "draft",
+        author_id: authorId,
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .put(`/api/posts/${post.id}`)
+      .send({ title: "Hacked", content: "Hacked" })
+      .expect(401);
+  });
+
+  it("PATCH /api/posts/:id - actualizar post ajeno devuelve 403", async () => {
+    const post = await postRepository.save(
+      postRepository.create({
+        title: "Author Post",
+        content: "Content",
+        slug: "author-post-patch",
+        status: "draft",
+        author_id: authorId,
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .patch(`/api/posts/${post.id}`)
+      .set("Authorization", "Bearer " + otherToken)
+      .send({ title: "Intruder Title" })
+      .expect(403);
+  });
+
+  it("PUT /api/posts/:id - actualizar post ajeno devuelve 403", async () => {
+    const post = await postRepository.save(
+      postRepository.create({
+        title: "Author Post",
+        content: "Content",
+        slug: "author-post-put",
+        status: "draft",
+        author_id: authorId,
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .put(`/api/posts/${post.id}`)
+      .set("Authorization", "Bearer " + otherToken)
+      .send({ title: "Intruder", content: "Intruder content" })
+      .expect(403);
+  });
+
+  it("PATCH /api/posts/:id - post sin author_id (legacy) puede ser actualizado por cualquier usuario autenticado", async () => {
+    const post = await postRepository.save(
+      postRepository.create({
+        title: "Legacy Post",
+        content: "Content",
+        slug: "legacy-post",
+        status: "draft",
+        author_id: null,
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .patch(`/api/posts/${post.id}`)
+      .set("Authorization", "Bearer " + otherToken)
+      .send({ title: "Claimed Title" })
+      .expect(200);
+
+    expect(response.body.title).toBe("Claimed Title");
+  });
+
+  it("PATCH /api/posts/:id - el autor puede transferir la autoría a otro usuario", async () => {
+    const other = await userRepository.findOne({ where: { email: "other@update-test.com" } });
+
+    const post = await postRepository.save(
+      postRepository.create({
+        title: "Author Post",
+        content: "Content",
+        slug: "author-transfer-post",
+        status: "draft",
+        author_id: authorId,
+      }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .patch(`/api/posts/${post.id}`)
+      .set("Authorization", "Bearer " + authorToken)
+      .send({ author_id: other!.id })
+      .expect(200);
+
+    expect(response.body.author_id).toBe(other!.id);
   });
 });
