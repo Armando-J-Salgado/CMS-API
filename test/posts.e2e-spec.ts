@@ -2,18 +2,73 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe, BadRequestException } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { DataSource } from 'typeorm';
-import { Post } from '../src/posts/entities/post.entity';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
+import { PostsService } from '../src/posts/posts.service';
+
+const MOCK_POSTS = Array.from({ length: 15 }).map((_, idx) => {
+  const i = idx + 1;
+  return {
+    id: i,
+    title: `Post Title ${i}`,
+    content: `Content of post ${i} NestJS`,
+    excerpt: `Excerpt ${i}`,
+    slug: `post-title-${i}`,
+    status: i <= 10 ? 'publish' : 'draft',
+    author_id: i % 2 === 0 ? 2 : 1,
+    published_at: i <= 10 ? new Date().toISOString() : null,
+    created_at: new Date(Date.now() - i * 1000).toISOString(),
+  };
+});
 
 describe('PostsController (e2e)', () => {
   let app: INestApplication;
-  let dataSource: DataSource;
+
+  const mockPostsService = {
+    findAll: jest.fn().mockImplementation((query) => {
+      const { page = 1, per_page = 10, search, status = 'publish', author, orderby = 'created_at', order = 'desc' } = query;
+      
+      let filtered = MOCK_POSTS.filter(p => p.status === status);
+      
+      if (author) {
+        filtered = filtered.filter(p => p.author_id === Number(author));
+      }
+      
+      if (search) {
+        const lowerSearch = search.toLowerCase();
+        filtered = filtered.filter(p => p.title.toLowerCase().includes(lowerSearch) || p.content.toLowerCase().includes(lowerSearch));
+      }
+
+      filtered.sort((a: any, b: any) => {
+        let valA = a[orderby];
+        let valB = b[orderby];
+        if (valA < valB) return order === 'asc' ? -1 : 1;
+        if (valA > valB) return order === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      const total = filtered.length;
+      const skip = (page - 1) * per_page;
+      const paginated = filtered.slice(skip, skip + per_page);
+
+      return {
+        data: paginated,
+        meta: {
+          total,
+          pages: Math.ceil(total / per_page),
+          current_page: Number(page),
+          per_page: Number(per_page),
+        }
+      };
+    }),
+  };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(PostsService)
+      .useValue(mockPostsService)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     
@@ -41,25 +96,6 @@ describe('PostsController (e2e)', () => {
     );
 
     await app.init();
-    
-    dataSource = moduleFixture.get<DataSource>(DataSource);
-    await dataSource.synchronize(true);
-
-    const postRepo = dataSource.getRepository(Post);
-    // Seed 15 posts
-    const postsToInsert = [];
-    for (let i = 1; i <= 15; i++) {
-      postsToInsert.push({
-        title: `Post Title ${i}`,
-        content: `Content of post ${i} NestJS`,
-        excerpt: `Excerpt ${i}`,
-        slug: `post-title-${i}`,
-        status: i <= 10 ? 'publish' : 'draft',
-        author_id: i % 2 === 0 ? 2 : 1,
-        published_at: i <= 10 ? new Date() : null,
-      });
-    }
-    await postRepo.save(postsToInsert);
   });
 
   afterAll(async () => {
