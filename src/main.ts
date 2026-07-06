@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { ValidationPipe, BadRequestException } from "@nestjs/common";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -17,7 +18,9 @@ async function bootstrap() {
       exceptionFactory: (errors) => {
         const details: Record<string, string> = {};
         errors.forEach((e) => {
-          details[e.property] = Object.values(e.constraints ?? {}).join(", ");
+          if (e.constraints) {
+            details[e.property] = Object.values(e.constraints).join(", ");
+          }
         });
         return new UnprocessableEntityException({
           error: "Unprocessable Entity",

@@ -34,6 +34,7 @@ import { ReplacePostDto } from "./dto/replace-post.dto";
 import { UpdatePostDto } from "./dto/update-post.dto";
 import { Post as PostEntity } from "./entities/post.entity";
 import { PostsService } from "./posts.service";
+import { GetPostsQueryDto } from "./dto/get-posts-query.dto";
 
 @ApiTags("posts")
 @ApiBearerAuth()
@@ -182,5 +183,12 @@ export class PostsController {
       return this.postsService.forceDelete(id, req.user.id);
     }
     return this.postsService.softDelete(id, req.user.id);
+  }
+
+  @Get()
+  @ApiOperation({ summary: "Get all posts" })
+  @ApiResponse({ status: 200, description: "Returns paginated list of posts." })
+  async findAll(@Query() query: GetPostsQueryDto) {
+    return this.postsService.findAll(query);
   }
 }
