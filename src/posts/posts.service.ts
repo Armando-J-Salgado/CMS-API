@@ -138,11 +138,40 @@ export class PostsService {
   }
 
   private slugify(text: string): string {
-    return text
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/[\s_-]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    const source = text.toLowerCase().trim();
+    let slug = "";
+    let previousWasSeparator = false;
+
+    for (const char of source) {
+      const code = char.charCodeAt(0);
+      const isLetter = code >= 97 && code <= 122;
+      const isDigit = code >= 48 && code <= 57;
+      const isSeparator =
+        char === " " ||
+        char === "\t" ||
+        char === "\n" ||
+        char === "\r" ||
+        char === "\f" ||
+        char === "\v" ||
+        char === "_" ||
+        char === "-";
+
+      if (isLetter || isDigit) {
+        slug += char;
+        previousWasSeparator = false;
+        continue;
+      }
+
+      if (isSeparator && !previousWasSeparator && slug.length > 0) {
+        slug += "-";
+        previousWasSeparator = true;
+      }
+    }
+
+    if (slug.endsWith("-")) {
+      return slug.slice(0, -1);
+    }
+
+    return slug;
   }
 }
