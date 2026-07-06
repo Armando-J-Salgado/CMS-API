@@ -2,12 +2,33 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { ValidationPipe, BadRequestException } from "@nestjs/common";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix("api");
   app.useGlobalFilters(new HttpExceptionFilter());
+  
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      exceptionFactory: (errors) => {
+        const details: Record<string, string> = {};
+        errors.forEach((err) => {
+          if (err.constraints) {
+            details[err.property] = Object.values(err.constraints)[0];
+          }
+        });
+        return new BadRequestException({
+          error: "Bad Request",
+          message: "Validation failed",
+          details,
+        });
+      },
+    }),
+  );
 
   // Swagger setup
   const config = new DocumentBuilder()
