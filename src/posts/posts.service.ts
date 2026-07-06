@@ -9,5 +9,13 @@ export class PostsService {
     @InjectRepository(Post)
     private readonly postRepository: Repository<Post>,
   ) {}
-  // Business logic will be implemented in subsequent specs
+  
+  async findById(id: number): Promise<Post | null> {
+    return this.postRepository.findOne({ where: { id } });
+  }
+
+  isOwner(post: Post, userId?: number): boolean {
+    if (!userId) return false;
+    return post.author_id === userId;
+  }
 }
