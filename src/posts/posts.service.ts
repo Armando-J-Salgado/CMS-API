@@ -133,6 +133,59 @@ export class PostsService {
     return await this.postRepository.save(post);
   }
 
+  async softDelete(id: number, currentUserId: number): Promise<void> {
+    const post = await this.postRepository.findOne({ where: { id } });
+    if (!post) {
+      throw new NotFoundException(`Post con ID ${id} no encontrado.`);
+    }
+
+    if (post.author_id !== null && post.author_id !== currentUserId) {
+      throw new ForbiddenException("No tienes permiso para eliminar este post.");
+    }
+
+    if (post.status === "trash") {
+      return;
+    }
+
+    post.status = "trash";
+    post.deleted_at = new Date();
+    await this.postRepository.save(post);
+  }
+
+  async forceDelete(id: number, currentUserId: number): Promise<void> {
+    const post = await this.postRepository.findOne({ where: { id } });
+    if (!post) {
+      throw new NotFoundException(`Post con ID ${id} no encontrado.`);
+    }
+
+    if (post.author_id !== null && post.author_id !== currentUserId) {
+      throw new ForbiddenException("No tienes permiso para eliminar este post.");
+    }
+
+    await this.postRepository.remove(post);
+  }
+
+  async restore(id: number, currentUserId: number): Promise<Post> {
+    const post = await this.postRepository.findOne({ where: { id } });
+    if (!post) {
+      throw new NotFoundException(`Post con ID ${id} no encontrado.`);
+    }
+
+    if (post.author_id !== null && post.author_id !== currentUserId) {
+      throw new ForbiddenException('No tienes permiso para restaurar este post.');
+    }
+
+    if (post.status !== 'trash') {
+      throw new UnprocessableEntityException(
+        'El post no está en trash y no puede ser restaurado.',
+      );
+    }
+
+    post.status = 'draft';
+    post.deleted_at = null;
+    return await this.postRepository.save(post);
+  }
+
   private slugify(text: string): string {
     const source = text.toLowerCase().trim();
     let slug = "";
