@@ -34,6 +34,7 @@ async function bootstrap() {
     .setDescription("CMS API built with NestJS, TypeORM, and SQLite")
     .setVersion("1.0")
     .addTag("posts")
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("api/docs", app, document);

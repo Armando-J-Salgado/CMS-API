@@ -25,6 +25,7 @@ import {
   ApiQuery,
   ApiResponse,
   ApiTags,
+  ApiBearerAuth,
 } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { OptionalJwtAuthGuard } from "../auth/guards/optional-jwt-auth.guard";
@@ -35,6 +36,7 @@ import { Post as PostEntity } from "./entities/post.entity";
 import { PostsService } from "./posts.service";
 
 @ApiTags("posts")
+@ApiBearerAuth()
 @Controller("posts")
 @UseInterceptors(ClassSerializerInterceptor)
 export class PostsController {
@@ -54,6 +56,11 @@ export class PostsController {
 
   @Get(":id")
   @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: "Get a post by ID" })
+  @ApiParam({ name: "id", type: "number", description: "The unique ID of the post" })
+  @ApiResponse({ status: 200, description: "The post was successfully retrieved.", type: PostEntity })
+  @ApiResponse({ status: 403, description: "Forbidden — not the post author." })
+  @ApiResponse({ status: 404, description: "Post not found." })
   async findOne(@Param("id", ParseIntPipe) id: number, @Req() req: any) {
     const post = await this.postsService.findById(id);
     if (!post) {
