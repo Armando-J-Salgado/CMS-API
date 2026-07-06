@@ -150,7 +150,7 @@ describe("Posts Update (e2e)", () => {
       .expect(200);
 
     expect(response.body.status).toBe("draft");
-    expect(response.body.deleted_at).toBeNull();
+    expect(response.body).not.toHaveProperty("deleted_at");
   });
 
   it("PATCH /api/posts/:id - should block transition to publish if title or content is empty", async () => {

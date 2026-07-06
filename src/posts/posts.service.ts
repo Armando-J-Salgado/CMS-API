@@ -1,11 +1,16 @@
-import { Injectable, NotFoundException, UnprocessableEntityException, ForbiddenException } from "@nestjs/common";
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Post } from "./entities/post.entity";
-import { CreatePostDto } from "./dto/create-post.dto";
 import { BadRequestError } from "../common/errors/app-errors";
-import { UpdatePostDto } from "./dto/update-post.dto";
+import { CreatePostDto } from "./dto/create-post.dto";
 import { ReplacePostDto } from "./dto/replace-post.dto";
+import { UpdatePostDto } from "./dto/update-post.dto";
+import { Post } from "./entities/post.entity";
 
 @Injectable()
 export class PostsService {
@@ -41,65 +46,88 @@ export class PostsService {
     }
   }
 
+  async findById(id: number): Promise<Post | null> {
+    return this.postRepository.findOne({ where: { id } });
+  }
 
-  async update(id: number, dto: UpdatePostDto | ReplacePostDto, currentUserId?: number): Promise<Post> {
+  isOwner(post: Post, userId?: number): boolean {
+    if (!userId) return false;
+    return post.author_id === userId;
+  }
+
+  async update(
+    id: number,
+    dto: UpdatePostDto | ReplacePostDto,
+    currentUserId?: number,
+  ): Promise<Post> {
     const post = await this.postRepository.findOne({ where: { id } });
     if (!post) {
       throw new NotFoundException(`Post con ID ${id} no encontrado.`);
     }
 
-    // Bloqueo de trash: un post en trash no puede ser actualizado directamente.
-    // Solo se permite si se está restaurando (cambiando status a otro diferente de trash).
     if (post.status === "trash") {
       if (dto.status === undefined || dto.status === "trash") {
-        throw new UnprocessableEntityException("Un post en trash no puede ser actualizado directamente. Restáuralo primero.");
+        throw new UnprocessableEntityException(
+          "Un post en trash no puede ser actualizado directamente. Restáuralo primero.",
+        );
       }
     }
 
-    // Validación de Propiedad
-    if (currentUserId !== undefined && post.author_id !== null && post.author_id !== currentUserId) {
+    if (
+      currentUserId !== undefined &&
+      post.author_id !== null &&
+      post.author_id !== currentUserId
+    ) {
       throw new ForbiddenException("No tienes permiso para modificar este post.");
     }
 
-    // Determinar valores finales
     const finalStatus = dto.status !== undefined ? dto.status : post.status;
     const finalTitle = dto.title !== undefined ? dto.title : post.title;
     const finalContent = dto.content !== undefined ? dto.content : post.content;
 
-    // Validación de transición a publish: no puede tener título o contenido vacíos
     if (finalStatus === "publish") {
-      if (!finalTitle || finalTitle.trim() === "" || !finalContent || finalContent.trim() === "") {
-        throw new UnprocessableEntityException("Un post solo se puede pasar a 'publish' si el título y el contenido no están vacíos.");
+      if (
+        !finalTitle ||
+        finalTitle.trim() === "" ||
+        !finalContent ||
+        finalContent.trim() === ""
+      ) {
+        throw new UnprocessableEntityException(
+          "Un post solo se puede pasar a 'publish' si el título y el contenido no están vacíos.",
+        );
       }
     }
 
-    // Auto-generación de slug o asignación
-    const slugToCheck = dto.slug !== undefined ? dto.slug : (dto.title !== undefined ? this.slugify(dto.title) : undefined);
+    const slugToCheck =
+      dto.slug !== undefined
+        ? dto.slug
+        : dto.title !== undefined
+          ? this.slugify(dto.title)
+          : undefined;
     if (slugToCheck !== undefined) {
-      const existingWithSlug = await this.postRepository.findOne({ where: { slug: slugToCheck } });
+      const existingWithSlug = await this.postRepository.findOne({
+        where: { slug: slugToCheck },
+      });
       if (existingWithSlug && existingWithSlug.id !== id) {
-        throw new UnprocessableEntityException(`El slug '${slugToCheck}' ya está en uso.`);
+        throw new UnprocessableEntityException(
+          `El slug '${slugToCheck}' ya está en uso.`,
+        );
       }
       post.slug = slugToCheck;
     }
 
-    // Manejo de campos de ciclo de vida:
-    // 1. Al entrar a publish por primera vez
     if (finalStatus === "publish" && post.published_at === null) {
       post.published_at = new Date();
     }
 
-    // 2. Al entrar a trash
     if (finalStatus === "trash" && post.status !== "trash") {
       post.deleted_at = new Date();
     }
 
-    // 3. Al salir de trash
     if (post.status === "trash" && finalStatus !== "trash") {
       post.deleted_at = null;
     }
 
-    // Actualización de campos
     if (dto.title !== undefined) post.title = dto.title;
     if (dto.content !== undefined) post.content = dto.content;
     if (dto.excerpt !== undefined) post.excerpt = dto.excerpt;
@@ -110,12 +138,40 @@ export class PostsService {
   }
 
   private slugify(text: string): string {
-    return text
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/[\s_-]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    const source = text.toLowerCase().trim();
+    let slug = "";
+    let previousWasSeparator = false;
+
+    for (const char of source) {
+      const code = char.charCodeAt(0);
+      const isLetter = code >= 97 && code <= 122;
+      const isDigit = code >= 48 && code <= 57;
+      const isSeparator =
+        char === " " ||
+        char === "\t" ||
+        char === "\n" ||
+        char === "\r" ||
+        char === "\f" ||
+        char === "\v" ||
+        char === "_" ||
+        char === "-";
+
+      if (isLetter || isDigit) {
+        slug += char;
+        previousWasSeparator = false;
+        continue;
+      }
+
+      if (isSeparator && !previousWasSeparator && slug.length > 0) {
+        slug += "-";
+        previousWasSeparator = true;
+      }
+    }
+
+    if (slug.endsWith("-")) {
+      return slug.slice(0, -1);
+    }
+
+    return slug;
   }
 }
-

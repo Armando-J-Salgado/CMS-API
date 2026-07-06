@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { Exclude } from "class-transformer";
 
 @Entity("posts")
 export class Post {
@@ -37,5 +38,6 @@ export class Post {
   published_at!: Date | null;
 
   @Column({ type: "datetime", nullable: true })
+  @Exclude()
   deleted_at!: Date | null;
 }
