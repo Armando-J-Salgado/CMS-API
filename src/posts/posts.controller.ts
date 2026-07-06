@@ -2,6 +2,7 @@ import {
   Body,
   ClassSerializerInterceptor,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
@@ -12,6 +13,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
   UseInterceptors,
@@ -20,6 +22,7 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger";
@@ -74,6 +77,12 @@ export class PostsController {
 
   @Get(":id/trash")
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get a trashed post by ID' })
+  @ApiParam({ name: 'id', type: 'number', description: 'The unique ID of the post' })
+  @ApiResponse({ status: 200, description: 'The trashed post.', type: PostEntity })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiResponse({ status: 403, description: 'Forbidden — not the post author.' })
+  @ApiResponse({ status: 404, description: 'Post not found or not in trash.' })
   async findOneTrash(@Param("id", ParseIntPipe) id: number, @Req() req: any) {
     const post = await this.postsService.findById(id);
     if (!post) {
@@ -88,7 +97,25 @@ export class PostsController {
       throw new ForbiddenException("You do not have access to this post");
     }
 
-    return post;
+    // Retornar objeto plano para que deleted_at no sea excluido por @Exclude()
+    return { ...post };
+  }
+
+  @Post(':id/restore')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Restore a trashed post' })
+  @ApiParam({ name: 'id', type: 'number', description: 'The unique ID of the post' })
+  @ApiResponse({ status: 200, description: 'Post restored successfully.', type: PostEntity })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiResponse({ status: 403, description: 'Forbidden — not the post author.' })
+  @ApiResponse({ status: 404, description: 'Post not found.' })
+  @ApiResponse({ status: 422, description: 'Post is not in trash.' })
+  async restore(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ): Promise<PostEntity> {
+    return this.postsService.restore(id, req.user.id);
   }
 
   @Patch(":id")
@@ -127,5 +154,26 @@ export class PostsController {
     @Req() req: any,
   ): Promise<PostEntity> {
     return await this.postsService.update(id, dto, req.user.id);
+  }
+
+  @Delete(":id")
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: "Delete a post (soft-delete or force-delete)" })
+  @ApiParam({ name: "id", type: "number", description: "The unique ID of the post" })
+  @ApiQuery({ name: "force", required: false, type: "boolean", description: "If true, permanently deletes the post" })
+  @ApiResponse({ status: 204, description: "Post deleted successfully." })
+  @ApiResponse({ status: 401, description: "Unauthorized." })
+  @ApiResponse({ status: 403, description: "Forbidden — not the post author." })
+  @ApiResponse({ status: 404, description: "Post not found." })
+  async delete(
+    @Param("id", ParseIntPipe) id: number,
+    @Query("force") force: string,
+    @Req() req: any,
+  ): Promise<void> {
+    if (force === "true") {
+      return this.postsService.forceDelete(id, req.user.id);
+    }
+    return this.postsService.softDelete(id, req.user.id);
   }
 }
