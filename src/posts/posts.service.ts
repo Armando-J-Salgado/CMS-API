@@ -82,6 +82,12 @@ export class PostsService {
     const finalTitle = dto.title !== undefined ? dto.title : post.title;
     const finalContent = dto.content !== undefined ? dto.content : post.content;
 
+    if (post.status === "publish" && finalStatus === "pending") {
+      throw new UnprocessableEntityException(
+        "Un post publicado no puede regresar a estado pendiente de revisión.",
+      );
+    }
+
     if (finalStatus === "publish") {
       if (
         !finalTitle ||
