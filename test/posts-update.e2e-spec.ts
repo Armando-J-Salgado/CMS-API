@@ -414,4 +414,26 @@ describe("Posts Update (e2e)", () => {
 
     expect(response.body.author_id).toBe(other!.id);
   });
+
+  it("PATCH /api/posts/:id - should block transition from publish to pending", async () => {
+    const post = postRepository.create({
+      title: "Published Post",
+      content: "Content",
+      slug: "published-post-to-pending",
+      status: "publish",
+      published_at: new Date(),
+      author_id: authorId,
+    });
+    const savedPost = await postRepository.save(post);
+
+    const response = await request(app.getHttpServer())
+      .patch(`/api/posts/${savedPost.id}`)
+      .set("Authorization", "Bearer " + authorToken)
+      .send({ status: "pending" })
+      .expect(422);
+
+    expect(response.body.message).toBe(
+      "Un post publicado no puede regresar a estado pendiente de revisión.",
+    );
+  });
 });
