@@ -2,6 +2,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
   UnprocessableEntityException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -225,7 +226,7 @@ export class PostsService {
     return slug;
   }
 
-  async findAll(query: GetPostsQueryDto) {
+  async findAll(query: GetPostsQueryDto, currentUserId?: number) {
     const { 
       page = 1, 
       per_page = 10, 
@@ -236,12 +237,28 @@ export class PostsService {
       order = OrderDirection.DESC 
     } = query;
 
+    if (status !== PostStatus.PUBLISH) {
+      if (!currentUserId) {
+        throw new UnauthorizedException({
+          error: 'Unauthorized',
+          message: 'Unauthorized',
+        });
+      }
+      if (author && author !== currentUserId) {
+        throw new ForbiddenException("You do not have access to view unpublished posts of other authors.");
+      }
+    }
+
     const qb = this.postRepository.createQueryBuilder("post");
 
     qb.where("post.status = :status", { status });
 
-    if (author) {
-      qb.andWhere("post.author_id = :author", { author });
+    if (status !== PostStatus.PUBLISH) {
+      qb.andWhere("(post.author_id = :currentUserId OR post.author_id IS NULL)", { currentUserId });
+    } else {
+      if (author) {
+        qb.andWhere("post.author_id = :author", { author });
+      }
     }
 
     if (search) {

@@ -186,9 +186,10 @@ export class PostsController {
   }
 
   @Get()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: "Get all posts" })
   @ApiResponse({ status: 200, description: "Returns paginated list of posts." })
-  async findAll(@Query() query: GetPostsQueryDto) {
-    return this.postsService.findAll(query);
+  async findAll(@Query() query: GetPostsQueryDto, @Req() req: any) {
+    return this.postsService.findAll(query, req.user?.id);
   }
 }
